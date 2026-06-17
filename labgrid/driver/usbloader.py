@@ -163,6 +163,7 @@ class UUUDriver(Driver, BootstrapProtocol):
 
     image = attr.ib(default=None)
     script = attr.ib(default='', validator=attr.validators.instance_of(str))
+    bmap : bool= attr.ib(default=False, validator=attr.validators.instance_of(bool))
 
     def __attrs_post_init__(self):
         super().__attrs_post_init__()
@@ -186,6 +187,11 @@ class UUUDriver(Driver, BootstrapProtocol):
             filename = self.target.env.config.get_image_path(self.image)
         mf = ManagedFile(filename, self.loader)
         mf.sync_to_resource()
+
+        if self.bmap:
+            if not mf.attach_bmap():
+                raise FileNotFoundError(f'BMAP file not found for {filename}')
+            cmd.append('-bmap')
 
         if self.script:
             cmd.extend(['-b', self.script])
