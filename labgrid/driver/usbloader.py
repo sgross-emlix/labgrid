@@ -181,12 +181,14 @@ class UUUDriver(Driver, BootstrapProtocol):
     @Driver.check_active
     @step(args=['filename'])
     def load(self, filename=None):
+        cmd = []
         if filename is None and self.image is not None:
             filename = self.target.env.config.get_image_path(self.image)
         mf = ManagedFile(filename, self.loader)
         mf.sync_to_resource()
 
-        cmd = ['-b', self.script] if self.script else []
+        if self.script:
+            cmd.extend(['-b', self.script])
 
         processwrapper.check_output(
             self.loader.command_prefix + [self.tool] + cmd + [mf.get_remote_path()],
