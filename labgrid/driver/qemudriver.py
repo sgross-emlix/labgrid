@@ -11,7 +11,7 @@ import tempfile
 import time
 
 import attr
-from pexpect import TIMEOUT
+from pexpect import TIMEOUT, EOF
 
 from ..factory import target_factory
 from ..protocol import PowerProtocol, ConsoleProtocol
@@ -220,6 +220,12 @@ class QEMUDriver(ConsoleExpectMixin, Driver, PowerProtocol, ConsoleProtocol):
 
         return cmd
 
+    def drain_console(self):
+        while True:
+            idx, *_ = self.expect([".+", "", TIMEOUT, EOF])
+            if idx != 0:
+                break
+
     def on_activate(self):
         self._tempdir = tempfile.mkdtemp(prefix="labgrid-qemu-tmp-")
         sockpath = f"{self._tempdir}/serialrw"
@@ -311,6 +317,7 @@ class QEMUDriver(ConsoleExpectMixin, Driver, PowerProtocol, ConsoleProtocol):
             return
         self.monitor_command('stop')
         self.monitor_command('system_reset')
+        self.drain_console()
         self.status = 0
 
     @Driver.check_active
