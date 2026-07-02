@@ -3,6 +3,7 @@ import logging
 import os
 import subprocess
 from importlib import import_module
+from typing import Optional, Self
 
 import attr
 
@@ -163,3 +164,27 @@ class ManagedFile:
 
     def get_user_cache_path(self):
         return f"/var/cache/labgrid/{get_user()}"
+
+    def attach_bmap(self) -> Optional[Self]:
+        """
+        Try to find a block map file using the same logic that bmaptool and uuu use.
+        That is:
+            <image> -> <image>.bmap
+            <image>.bz2 -> <image>.bmap
+        Uploads bmap file and symlinks it next to `self` so uuu and bmaptool will automatically find it
+        """
+        bmap = None
+        image_path = self.local_path
+        while True:
+            bmap_path = f"{image_path}.bmap"
+            if os.path.exists(bmap_path):
+                bmap = ManagedFile(bmap_path, self.resource)
+                break
+
+            image_path, ext = os.path.splitext(image_path)
+            if not ext:
+                return None
+
+        symlink = os.path.join(os.path.dirname(self.get_remote_path()), os.path.basename(bmap_path))
+        bmap.sync_to_resource(symlink)
+        return bmap

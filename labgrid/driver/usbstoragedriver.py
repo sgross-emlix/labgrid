@@ -11,7 +11,7 @@ from ..resource.remote import RemoteUSBResource
 from ..step import step
 from ..util.managedfile import ManagedFile
 from .common import Driver
-from ..driver.exception import ExecutionError
+from .exception import ExecutionError
 
 from ..util.helper import processwrapper
 from ..util.agentwrapper import AgentWrapper
@@ -150,10 +150,9 @@ class USBStorageDriver(Driver):
         remote_path = mf.get_remote_path()
 
         if mode == Mode.DD:
-            self.logger.info('Writing %s to %s using dd.', remote_path, target)
             block_size = '512' if skip or seek else '4M'
+
             args = [
-                "dd",
                 f"if={remote_path}",
                 f"of={target}",
                 "oflag=direct",
@@ -165,38 +164,22 @@ class USBStorageDriver(Driver):
             ]
         elif mode == Mode.BMAPTOOL:
             if skip or seek:
-                raise ExecutionError("bmaptool does not support skip or seek")
+                raise ValueError(f"{mode} does neither support skip nor seek")
 
-            # Try to find a block map file using the same logic that bmaptool
-            # uses. Handles cases where the image is named like: <image>.bz2
-            # and the block map file is <image>.bmap
-            mf_bmap = None
-            image_path = filename
-            while True:
-                bmap_path = f"{image_path}.bmap"
-                if os.path.exists(bmap_path):
-                    mf_bmap = ManagedFile(bmap_path, self.storage)
-                    mf_bmap.sync_to_resource()
-                    break
-
-                image_path, ext = os.path.splitext(image_path)
-                if not ext:
-                    break
-
-            self.logger.info('Writing %s to %s using bmaptool.', remote_path, target)
             args = [
-                "bmaptool",
                 "copy",
                 f"{remote_path}",
                 f"{target}",
             ]
 
-            if mf_bmap is None:
+            if not mf.attach_bmap():
                 args.append("--nobmap")
-            else:
-                args.append(f"--bmap={mf_bmap.get_remote_path()}")
         else:
             raise ValueError
+
+        args.insert(0, f"{mode}")
+
+        self.logger.info(f'Writing {remote_path} to {target} using {mode}:\n\t{' '.join(args)}')
 
         processwrapper.check_output(
             self.storage.command_prefix + args,
